@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship, declarative_base
 Base = declarative_base()
 
 task_tag = Table('task_tag', Base.metadata,
-                 Column('task_id', ForeignKey('tasks.user_id'), primary_key=True),
+                 Column('task_id', ForeignKey('tasks.id'), primary_key=True),
                  Column('tag_id', ForeignKey('tags.id'), primary_key=True,)
                  )
 
@@ -26,4 +26,4 @@ class Tag(Base):
 
     tasks = relationship("Task", secondary="task_tag", backref='tasks', overlaps="tags,tags")
     id = Column(Integer, primary_key=True, index=True)
-    tag = Column(String, index=True)
+    tag = Column(String, index=True, unique=True)

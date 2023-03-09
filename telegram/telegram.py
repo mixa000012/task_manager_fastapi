@@ -1,11 +1,12 @@
 import logging
+from decouple import config
 
 from aiogram import Bot, Dispatcher, executor, types
 import re
 import requests
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = ''
+API_TOKEN = config('API_TOKEN')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,23 +37,32 @@ async def get_all_tasks(chat_id, message_id=None, user_id=None):
 
 @dp.message_handler()
 async def show_tasks(message: types.Message):
-    tag_match = re.search(r'\bтэг\s*:\s*(\S+)\b', message.text, re.IGNORECASE)
-    if re.match(r'^\bТаски\b', message.text, re.IGNORECASE):
+    tasks_match = re.match(r'^\bТаски\b', message.text, re.IGNORECASE)
+    task_match = re.match(r'^\bТаск\b', message.text, re.IGNORECASE)
+
+    if tasks_match:
         await get_all_tasks(message.chat.id, user_id=message.from_user.id)
 
+    elif task_match:
+        task_text = re.sub(r'^\s*\bтаск\b\s*', '', message.text, flags=re.IGNORECASE)
+        tag_text = re.sub(r'^.*?\bтэг\b\s*', '', task_text, flags=re.IGNORECASE)
+        tag_match = requests.get(f'http://127.0.0.1:8000/task/is_exist_tag?tag={tag_text}')
         if tag_match:
-            tag = tag_match.group(1)
-            await bot.send_message(chat_id=message.chat.id,
-                                   text=f'Got it! You want to do a task with the tag "{tag}". 🤖👍')
-    elif re.match(r'^\bТаск\b', message.text, re.IGNORECASE):
-        task_text = message.text.replace('Таск', '').strip()
+            pure_task_text = re.search(r'(?<=\bтаск \b).*?(?=\bтэг\b)', message.text,
+                                       re.IGNORECASE | re.UNICODE).group()
+        elif not tag_match:
+            pure_task_text = task_text
+
         json_data = {
-            'title': task_text,
+            'title': pure_task_text,
             'description': '',
             'user_id': message.from_user.id
         }
-        r = requests.post('http://127.0.0.1:8000/task/create', json=json_data)
-        await message.answer(f"Task '{task_text}' created!")
+        r = requests.post('http://127.0.0.1:8000/task/create', json=json_data).json()
+
+        request = requests.put(
+            f'http://127.0.0.1:8000/task/add_tag?task_id={r.get("id")}&tag_name={tag_text}') if tag_match.text == 'true' else None
+        await message.answer(f"Task '{pure_task_text}' created!")
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('delete_task:'))

@@ -36,6 +36,13 @@ def get_all_tags(db: Session = Depends(get_db)):
     return tasks
 
 
+@task_router.get("/is_exist_tag")
+def is_exist_tag(tag: str, db: Session = Depends(get_db)):
+    if db.query(Tag).filter(Tag.tag == tag).count() > 0:
+        return True
+    return False
+
+
 @task_router.post("/create", response_model=TaskResponse)
 def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
     new_task = Task(
@@ -47,6 +54,7 @@ def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
     db.commit()
     db.refresh(new_task)
     return TaskResponse(
+        id=new_task.id,
         user_id=new_task.user_id,
         title=new_task.title,
         description=new_task.description,
