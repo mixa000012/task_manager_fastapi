@@ -33,9 +33,10 @@ def create_tag(item: TagCreate, user_id: int, db: Session = Depends(get_db)):
 
 
 @task_router.get("/get_all_tags")
-def get_all_tags(db: Session = Depends(get_db)):
-    tasks = db.query(Tag).all()
-    return tasks
+def get_all_tags(user_id:int, db: Session = Depends(get_db)):
+    tasks = db.query(Tag).filter_by(user_id=user_id).all()
+    text = [i.tag for i in tasks]
+    return text
 
 
 @task_router.get("/is_exist_tag")
@@ -74,7 +75,8 @@ def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
 @task_router.get("/get_tasks_by_tag")
 def get_task_by_tag(user_id: int, tag: str, db: Session = Depends(get_db)):
     tasks = db.query(Task).join(Task.tags).filter(Task.user_id == user_id).filter(Tag.tag == tag).all()
-    return tasks
+    text = [i.title for i in tasks]
+    return text
 
 
 @task_router.delete("/delete_task")

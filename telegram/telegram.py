@@ -15,8 +15,39 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-button_labels = ['Button 1', 'Button 2', 'Button 3', 'Button 4', 'Button 5']
 
+def get_button_lanels(user_id):
+    button_labels = requests.get(f'http://127.0.0.1:8000/task/get_all_tags?user_id={user_id}').json()
+    button_labels += ['Создать категорию']
+    return button_labels
+
+
+async def on_button_click(message: types.Message):
+    button_label = message.text
+    text = requests.get(
+        f'http://127.0.0.1:8000/task/get_tasks_by_tag?user_id={message.from_user.id}&tag={button_label}').json()
+    if text:
+        task_list = ''
+        for task in text:
+            task_list += task + "\n"
+    else:
+        task_list ='У вас нет задач в этой категории!'
+
+    await bot.send_message(chat_id=message.from_user.id, text=task_list)
+    await start_handler(message)
+
+@dp.message_handler(commands=['categories'])
+async def start_handler(message: types.Message):
+    button_labels = get_button_lanels(message.from_user.id)
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=3, selective=True).add(
+        *(KeyboardButton(text=label) for label in button_labels))
+
+    await bot.send_message(chat_id=message.chat.id, text="Choose a button:", reply_markup=keyboard)
+
+
+@dp.message_handler(lambda message: message.text in get_button_lanels(message.from_user.id))
+async def button_click_handler(message: types.Message):
+    await on_button_click(message)
 
 
 async def get_all_tasks(chat_id, message_id=None, user_id=None):
@@ -42,6 +73,7 @@ async def get_all_tasks(chat_id, message_id=None, user_id=None):
 async def show_tasks(message: types.Message):
     tasks_match = re.match(r'^\bТаски\b', message.text, re.IGNORECASE)
     task_match = re.match(r'^\bТаск\b', message.text, re.IGNORECASE)
+    tag_match = re.match(r'^тэг\s*(.*)', message.text, re.IGNORECASE)
 
     if tasks_match:
         await get_all_tasks(message.chat.id, user_id=message.from_user.id)
@@ -59,14 +91,22 @@ async def show_tasks(message: types.Message):
 
         json_data = {
             'title': pure_task_text,
-            'description': '',
             'user_id': message.from_user.id
         }
         r = requests.post('http://127.0.0.1:8000/task/create', json=json_data).json()
-        print(tag_match.text)
         request = requests.put(
             f'http://127.0.0.1:8000/task/add_tag?task_id={r.get("id")}&tag_name={tag_text}') if tag_match.text == 'true' else None
         await message.answer(f"Task '{pure_task_text}' created!")
+
+    elif tag_match:
+        tag_text = tag_match.group(1)
+
+        json_data = {
+            'tag': tag_text.strip(),
+        }
+
+        r = requests.post(f'http://127.0.0.1:8000/task/create_tag?user_id={message.from_user.id}', json=json_data).text
+        await message.answer(f"Tag '{tag_text.strip()}' created!{r}")
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('delete_task:'))
