@@ -9,12 +9,12 @@ task_router = APIRouter()
 
 
 @task_router.put("/add_tag")
-def add_tag(task_id: int, tag_name: str, db: Session = Depends(get_db)):
+def add_tag(task_id: int, tag_name: str, user_id:int, db: Session = Depends(get_db)):
     task = db.query(Task).get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     # tag = db.query(Tag).filter(Tag.tag == tag_name).first()
-    tag = db.query(Tag).filter_by(tag=tag_name).one()
+    tag = db.query(Tag).filter_by(tag=tag_name,user_id=user_id).one()
 
     task.tags = tag
     db.add(task)
@@ -76,6 +76,7 @@ def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
 def get_task_by_tag(user_id: int, tag: str, db: Session = Depends(get_db)):
     tasks = db.query(Task).join(Task.tags).filter(Task.user_id == user_id).filter(Tag.tag == tag).all()
     text = [i.title for i in tasks]
+    print(text)
     return text
 
 
