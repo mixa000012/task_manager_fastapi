@@ -75,9 +75,7 @@ def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
 @task_router.get("/get_tasks_by_tag")
 def get_task_by_tag(user_id: int, tag: str, db: Session = Depends(get_db)):
     tasks = db.query(Task).join(Task.tags).filter(Task.user_id == user_id).filter(Tag.tag == tag).all()
-    text = [i.title for i in tasks]
-    print(text)
-    return text
+    return tasks
 
 
 @task_router.delete("/delete_task")
