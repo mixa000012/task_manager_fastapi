@@ -4,7 +4,7 @@ from decouple import config
 from aiogram import Bot, Dispatcher, executor, types
 import re
 import requests
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 API_TOKEN = config('API_TOKEN')
 
@@ -14,6 +14,9 @@ logging.basicConfig(level=logging.INFO)
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
+
+button_labels = ['Button 1', 'Button 2', 'Button 3', 'Button 4', 'Button 5']
+
 
 
 async def get_all_tasks(chat_id, message_id=None, user_id=None):
@@ -47,10 +50,11 @@ async def show_tasks(message: types.Message):
         task_text = re.sub(r'^\s*\bтаск\b\s*', '', message.text, flags=re.IGNORECASE)
         tag_text = re.sub(r'^.*?\bтэг\b\s*', '', task_text, flags=re.IGNORECASE)
         tag_match = requests.get(f'http://127.0.0.1:8000/task/is_exist_tag?tag={tag_text}')
-        if tag_match:
+        if tag_match.text == 'true':
             pure_task_text = re.search(r'(?<=\bтаск \b).*?(?=\bтэг\b)', message.text,
                                        re.IGNORECASE | re.UNICODE).group()
-        elif not tag_match:
+
+        elif tag_match.text == 'false' or not tag_match:
             pure_task_text = task_text
 
         json_data = {
@@ -59,7 +63,7 @@ async def show_tasks(message: types.Message):
             'user_id': message.from_user.id
         }
         r = requests.post('http://127.0.0.1:8000/task/create', json=json_data).json()
-
+        print(tag_match.text)
         request = requests.put(
             f'http://127.0.0.1:8000/task/add_tag?task_id={r.get("id")}&tag_name={tag_text}') if tag_match.text == 'true' else None
         await message.answer(f"Task '{pure_task_text}' created!")

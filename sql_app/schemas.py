@@ -21,7 +21,5 @@ class TaskResponse(BaseModel):
     id: int
     user_id: int
     title: str
-    description: Optional[str] | None = None
-    is_done: bool
     created_at: datetime
     tags: List[Tag] | None = None
