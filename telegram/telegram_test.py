@@ -1,18 +1,14 @@
-from aiogram import types
-from aiogram.dispatcher.filters import Text
-from aiogram.dispatcher.filters.state import State, StatesGroup
 import logging
-from decouple import config
-from aiogram.dispatcher import FSMContext
-
-from aiogram import Bot, Dispatcher, executor, types
-import re
 import requests
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-
-from aiogram.dispatcher import FSMContext
+from decouple import config
+from aiogram import Bot, Dispatcher, types, executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+
+from function import create_category, get_button_labels, send_category_keyboard
 
 API_TOKEN = config('API_TOKEN')
 storage = MemoryStorage()
@@ -50,6 +46,54 @@ add_category_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
+async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None, tag=None):
+    url = f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}'
+    if tag:
+        url += f'&tag={tag}'
+    tasks_response = requests.get(url)
+    tasks = tasks_response.json()
+
+    buttons = [
+        [InlineKeyboardButton(text=task.get('title'), callback_data=f"delete_task:{task.get('id')}:{tag}")]
+        for task in tasks
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    if chat_type == 'private':
+        await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
+    elif message_id:
+        await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+    else:
+        await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
+
+
+@dp.message_handler(commands=['start'])
+async def start_handler(message: types.Message):
+    await message.answer("Привет! Я помогу тебе управлять своими задачами. Нажми на кнопку, чтобы начать",
+                         reply_markup=main_keyboard)
+
+
+@dp.message_handler(lambda message: message.text in ['Создать таск', 'Категории', 'Все задачи'])
+async def main_menu_handler(message: types.Message, state: FSMContext):
+    if message.text == 'Создать таск':
+        await message.answer("Введите описание таска:")
+        await state.set_state("waiting_for_task_description")
+
+    elif message.text == 'Категории':
+        keyboard = await send_category_keyboard(message.from_user.id)
+        await bot.send_message(chat_id=message.chat.id, text="Select a category:", reply_markup=keyboard)
+
+    elif message.text == 'Все задачи':
+        await get_all_tasks(chat_id=message.chat.id, user_id=message.from_user.id, message_id=message.message_id,
+                            chat_type=message.chat.type)
+
+
+@dp.message_handler(lambda message: message.text == 'Home')
+async def home_button_handler(message: types.Message):
+    await message.answer("Главное меню", reply_markup=main_keyboard)
+
+
 class CreateTask(StatesGroup):
     waiting_for_task_description = State()
     waiting_for_add_category = State()
@@ -61,69 +105,15 @@ class CreateCategory(StatesGroup):
     name = State()
 
 
-def get_buttons(user_id: int):
-    button_labels = requests.get(f'http://127.0.0.1:8000/task/get_all_tags?user_id={user_id}').json()
-    return button_labels
-
-
-async def handle_category_click(message: types.Message):
-    button_label = message.text
-    tasks = requests.get(
-        f'http://127.0.0.1:8000/task/get_tasks_by_tag?user_id={message.from_user.id}&tag={button_label}').json()
-    buttons = []
-    for task in tasks:
-        button_text = task.get('title')
-        button_callback_data = f"delete_task:{task.get('id')}"
-        button = InlineKeyboardButton(text=button_text, callback_data=button_callback_data)
-        buttons.append([button])
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await bot.send_message(message.chat.id, 'Ваши задачи', reply_markup=keyboard)
-
-
-@dp.message_handler(lambda message: message.text in get_buttons(message.from_user.id))
+@dp.message_handler(lambda message: message.text in get_button_labels(message.from_user.id))
 async def handle_category_click_wrapper(message: types.Message):
     await handle_category_click(message)
 
 
-async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None):
-    tasks = requests.get(f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}').json()
-    buttons = []
-    for task in tasks:
-        button_text = task.get('title')
-        button_callback_data = f"delete_task:{task.get('id')}"
-        button = InlineKeyboardButton(text=button_text, callback_data=button_callback_data)
-        buttons.append([button])
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-
-    if chat_type == 'private':
-        # Send a new message if requested or if no message exists yet
-        await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
-    else:
-        # Edit the existing message with the updated inline keyboard
-        await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
-
-
-@dp.message_handler(lambda message: message.text in ['Создать таск', 'Категории', 'Все задачи'])
-async def main_menu_handler(message: types.Message, state: FSMContext):
-    if message.text == 'Создать таск':
-        await message.answer("Введите описание таска:")
-
-        await state.set_state("waiting_for_task_description")
-
-    elif message.text == 'Категории':
-        keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
-            *(KeyboardButton(text=label) for label in get_buttons(message.from_user.id)))
-        new_category_button = KeyboardButton(text='Создать новую категорию')
-
-        keyboard.add(new_category_button)
-
-        keyboard.add(KeyboardButton(text='Home'))
-        await bot.send_message(chat_id=message.chat.id, text="Select a category:", reply_markup=keyboard)
-    elif message.text == 'Все задачи':
-        await get_all_tasks(chat_id=message.chat.id, user_id=message.from_user.id, message_id=message.message_id,
-                            chat_type=message.chat.type)
+async def handle_category_click(message: types.Message):
+    tag = message.text
+    await get_all_tasks(chat_id=message.chat.id, message_id=message.message_id, user_id=message.from_user.id, tag=tag,
+                        chat_type=message.chat.type)
 
 
 @dp.message_handler(lambda message: message.text == 'Создать новую категорию', state=None)
@@ -133,43 +123,26 @@ async def create_category_handler(message: types.Message):
 
 
 @dp.message_handler(state=CreateCategory.name)
-async def process_category_name(message: types.Message, state: FSMContext):
-    # Create the new category in the database
+async def process_create_category(message: types.Message, state: FSMContext):
     category_name = message.text
-    json_data = {
-        'tag': category_name,
-    }
-    r = requests.post(f'http://127.0.0.1:8000/task/create_tag?user_id={message.from_user.id}', json=json_data).text
-
-    # Return to the list of categories
-    await message.answer(f'Категория "{category_name}" создана')
+    error_msg = await create_category(message.from_user.id, category_name)
+    if error_msg is not None:
+        await message.answer(error_msg)
     await state.finish()
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
-        *(KeyboardButton(text=label) for label in get_buttons(message.from_user.id)))
-    new_category_button = KeyboardButton(text='Создать новую категорию')
-
-    keyboard.add(new_category_button)
-
-    keyboard.add(KeyboardButton(text='Home'))
-    await bot.send_message(chat_id=message.chat.id, text="Select a category:", reply_markup=keyboard)
+    keyboard = await send_category_keyboard(message.from_user.id)
+    await bot.send_message(chat_id=message.chat.id, text="Выберите категорию:", reply_markup=keyboard)
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('delete_task:'))
 async def process_callback_delete_task(callback_query: types.CallbackQuery):
-    task_id = int(callback_query.data.split(':')[1])
-
+    callback_data = callback_query.data.split(':')
+    task_id = int(callback_data[1])
+    tag = callback_data[2] if len(callback_data) > 2 else None
     r = requests.delete(f'http://127.0.0.1:8000/task/delete_task?task_id={task_id}')
-
     await get_all_tasks(chat_id=callback_query.message.chat.id, message_id=callback_query.message.message_id,
-                        user_id=callback_query.from_user.id
+                        user_id=callback_query.from_user.id, tag=tag
                         )
     await bot.answer_callback_query(callback_query.id, text=f"Task deleted.")
-
-
-# Handler for the "Home" button in the categories and tasks menus
-@dp.message_handler(lambda message: message.text == 'Home')
-async def home_button_handler(message: types.Message):
-    await message.answer("Главное меню", reply_markup=main_keyboard)
 
 
 @dp.message_handler(state="waiting_for_task_description")
@@ -182,7 +155,7 @@ async def create_task_handler(message: types.Message, state: FSMContext):
     r = requests.post('http://127.0.0.1:8000/task/create', json=json_data).json()
     await message.answer(f"Таск создан! {task_description}\n\nХотите добавить категорию?",
                          reply_markup=add_category_keyboard)
-    await state.update_data(task_id=r['id'],user_id=r['user_id'])
+    await state.update_data(task_id=r['id'], user_id=r['user_id'])
     await state.set_state(CreateTask.waiting_for_add_category)
 
 
@@ -190,12 +163,12 @@ async def create_task_handler(message: types.Message, state: FSMContext):
 async def add_category_handler(query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = int(data.get('user_id'))
-    tasks = requests.get(f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}').json()
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
-        *(KeyboardButton(text=label) for label in get_buttons(user_id)))
+        *(KeyboardButton(text=label) for label in get_button_labels(user_id)))
 
     await query.message.answer("Выберите категорию:", reply_markup=keyboard)
     await state.set_state(CreateTask.waiting_for_category_selection)
+
 
 @dp.message_handler(state=CreateTask.waiting_for_category_selection)
 async def process_category_name(message: types.Message, state: FSMContext):
@@ -207,7 +180,6 @@ async def process_category_name(message: types.Message, state: FSMContext):
     await message.answer(f"Категория {category_name} добавлена к задаче!")
     await state.finish()
     await bot.send_message(message.chat.id, "Главное меню", reply_markup=main_keyboard)
-
 
 
 @dp.callback_query_handler(lambda query: query.data == "add_category:no", state=CreateTask.waiting_for_add_category)

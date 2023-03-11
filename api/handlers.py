@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy.orm import Session
 from fastapi.routing import APIRouter
 from fastapi import Depends, HTTPException
@@ -72,12 +74,6 @@ def create_task(obj: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
     )
 
 
-@task_router.get("/get_tasks_by_tag")
-def get_task_by_tag(user_id: int, tag: str, db: Session = Depends(get_db)):
-    tasks = db.query(Task).join(Task.tags).filter(Task.user_id == user_id).filter(Tag.tag == tag).all()
-    return tasks
-
-
 @task_router.delete("/delete_task")
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     task = db.query(Task).filter_by(id=task_id).first()
@@ -87,8 +83,10 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True}
 
-
 @task_router.get("/get_all_tasks")
-def get_all_tasks(user_id: int, db: Session = Depends(get_db)):
-    tasks = db.query(Task).filter(Task.user_id == user_id).all()
+def get_all_tasks(user_id: int, tag: Optional[str] = None, db: Session = Depends(get_db)):
+    if tag:
+        tasks = db.query(Task).join(Task.tags).filter(Task.user_id == user_id).filter(Tag.tag == tag).all()
+    else:
+        tasks = db.query(Task).filter(Task.user_id == user_id).all()
     return tasks
