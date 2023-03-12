@@ -13,7 +13,6 @@ class TagCreate(Tag):
 
 class TaskCreate(BaseModel):
     title: str
-    description: str | None = None
     user_id: int
 
 
@@ -22,4 +21,3 @@ class TaskResponse(BaseModel):
     user_id: int
     title: str
     created_at: datetime
-    tags: List[Tag] | None = None

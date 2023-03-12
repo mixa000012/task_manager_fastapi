@@ -1,15 +1,19 @@
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-engine = create_engine(
-    'sqlite:///./sql_app.db', connect_args={"check_same_thread": False}, future=True, echo=True,
+engine = create_async_engine(
+    'postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/postgres',
+    future=True,
+    echo=True,
+    execution_options={"isolation_level": "AUTOCOMMIT"},
 )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+SessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-def get_db():
-    db = SessionLocal()
+async def get_db():
+    """Dependency for getting async session"""
     try:
-        yield db
+        session: AsyncSession = SessionLocal()
+        yield session
     finally:
-        db.close()
+        await session.close()

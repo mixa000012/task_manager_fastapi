@@ -186,6 +186,7 @@ async def add_category_handler(query: types.CallbackQuery, state: FSMContext):
         *(KeyboardButton(text=label) for label in get_button_labels(user_id)))
 
     await query.message.answer("Выберите категорию:", reply_markup=keyboard)
+    await query.message.delete()
     await state.set_state(CreateTask.waiting_for_category_selection)
 
 

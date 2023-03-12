@@ -1,3 +1,6 @@
 sql_app.db
 .idea/
 .env
+docker-compose-local.yaml
+alembic.ini
+migrations/
