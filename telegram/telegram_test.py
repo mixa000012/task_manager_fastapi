@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+
+import aiohttp
 import requests
 from decouple import config
 from aiogram import Bot, Dispatcher, types, executor
@@ -51,8 +53,9 @@ async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None, 
     url = f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}'
     if tag is not None:
         url += f'&tag={tag}'
-    tasks_response = requests.get(url)
-    tasks = tasks_response.json()
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            tasks = await resp.json()
 
     buttons = [
         [InlineKeyboardButton(text=task.get('title'), callback_data=f"delete_task:{task.get('id')}:{tag}")]
@@ -104,8 +107,12 @@ class CreateTask(StatesGroup):
 class CreateCategory(StatesGroup):
     name = State()
 
-
-@dp.message_handler(lambda message: message.text in get_button_labels(message.from_user.id))
+def get_buttons(user_id: int):
+    url = f'http://127.0.0.1:8000/task/get_all_tags'
+    params = {'user_id': user_id}
+    button_labels = requests.get(url, params=params).json()
+    return button_labels
+@dp.message_handler(lambda message: message.text in get_buttons(message.from_user.id))
 async def handle_category_click_wrapper(message: types.Message):
     await handle_category_click(message)
 
@@ -142,7 +149,7 @@ async def handle_delete_category(message: types.Message, state: FSMContext) -> N
     """
     try:
         keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
-            *(KeyboardButton(text=label) for label in get_button_labels(message.from_user.id)))
+            *(KeyboardButton(text=label) for label in await get_button_labels(message.from_user.id)))
 
         await message.answer("Выберите категорию:", reply_markup=keyboard)
         await state.set_state("waiting_for_category_name_for_deletion")
@@ -157,7 +164,9 @@ async def process_callback_delete_task(callback_query: types.CallbackQuery):
     tag = callback_data[2] if len(callback_data) > 2 else None
     if tag == "None":
         tag = None
-    r = requests.delete(f'http://127.0.0.1:8000/task/delete_task?task_id={task_id}')
+    async with aiohttp.ClientSession() as session:
+        async with session.delete(f"http://127.0.0.1:8000/task/delete_task?task_id={task_id}") as resp:
+            pass
     await get_all_tasks(chat_id=callback_query.message.chat.id, message_id=callback_query.message.message_id,
                         user_id=callback_query.from_user.id, tag=tag
                         )
@@ -171,7 +180,9 @@ async def create_task_handler(message: types.Message, state: FSMContext):
         'title': task_description,
         'user_id': message.from_user.id
     }
-    r = requests.post('http://127.0.0.1:8000/task/create', json=json_data).json()
+    async with aiohttp.ClientSession() as session:
+        async with session.post('http://127.0.0.1:8000/task/create', json=json_data) as response:
+            r = await response.json()
     await message.answer(f"Таск создан! {task_description}\n\nХотите добавить категорию?",
                          reply_markup=add_category_keyboard)
     await state.update_data(task_id=r['id'], user_id=r['user_id'])
@@ -183,7 +194,7 @@ async def add_category_handler(query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = int(data.get('user_id'))
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
-        *(KeyboardButton(text=label) for label in get_button_labels(user_id)))
+        *(KeyboardButton(text=label) for label in await get_button_labels(user_id)))
 
     await query.message.answer("Выберите категорию:", reply_markup=keyboard)
     await query.message.delete()
@@ -216,8 +227,12 @@ async def process_category_name(message: types.Message, state: FSMContext):
     category_name = message.text
     task_data = await state.get_data()
     task_id = task_data['task_id']
-    request = requests.put(
-        f'http://127.0.0.1:8000/task/add_tag?task_id={task_id}&tag_name={category_name}&user_id={message.from_user.id}')
+    async with aiohttp.ClientSession() as session:
+        url = f'http://127.0.0.1:8000/task/add_tag'
+        params = {'task_id': task_id, 'tag_name': category_name, 'user_id': message.from_user.id}
+        async with session.put(url, params=params) as resp:
+            if resp.status != 200:
+                raise Exception(f"Error adding category: {resp.status}")
     await message.answer(f"Категория {category_name} добавлена к задаче!")
     await state.finish()
     await bot.send_message(message.chat.id, "Главное меню", reply_markup=main_keyboard)
