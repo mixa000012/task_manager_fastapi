@@ -1,8 +1,8 @@
 from typing import Optional
-
 from sqlalchemy.orm import Session
 from fastapi.routing import APIRouter
 from fastapi import Depends, HTTPException
+
 from sql_app.session import get_db
 from sql_app.models import Task, Tag
 from sql_app.schemas import TaskResponse, TagCreate, TaskCreate
@@ -49,8 +49,8 @@ def is_exist_tag(tag: str, db: Session = Depends(get_db)):
 
 
 @task_router.delete("/delete_tag")
-def delete_tag(tag_id: int, db: Session = Depends(get_db)):
-    tag = db.query(Tag).filter_by(id=tag_id).delete()
+def delete_tag(user_id: int,tag: str, db: Session = Depends(get_db)):
+    tag = db.query(Tag).filter_by(user_id=user_id,tag=tag).delete()
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
     db.commit()

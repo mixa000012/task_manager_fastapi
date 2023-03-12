@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 import requests
 from decouple import config
@@ -8,7 +9,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from function import create_category, get_button_labels, send_category_keyboard
+from function import create_category, get_button_labels, send_category_keyboard, delete_category
 
 API_TOKEN = config('API_TOKEN')
 storage = MemoryStorage()
@@ -48,7 +49,7 @@ add_category_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 
 async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None, tag=None):
     url = f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}'
-    if tag:
+    if tag is not None:
         url += f'&tag={tag}'
     tasks_response = requests.get(url)
     tasks = tasks_response.json()
@@ -59,7 +60,6 @@ async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None, 
     ]
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-
     if chat_type == 'private':
         await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
     elif message_id:
@@ -82,7 +82,7 @@ async def main_menu_handler(message: types.Message, state: FSMContext):
 
     elif message.text == 'Категории':
         keyboard = await send_category_keyboard(message.from_user.id)
-        await bot.send_message(chat_id=message.chat.id, text="Select a category:", reply_markup=keyboard)
+        await bot.send_message(chat_id=message.chat.id, text="Выберете категорию:", reply_markup=keyboard)
 
     elif message.text == 'Все задачи':
         await get_all_tasks(chat_id=message.chat.id, user_id=message.from_user.id, message_id=message.message_id,
@@ -133,11 +133,30 @@ async def process_create_category(message: types.Message, state: FSMContext):
     await bot.send_message(chat_id=message.chat.id, text="Выберите категорию:", reply_markup=keyboard)
 
 
+@dp.message_handler(lambda message: message.text == 'Удаление категории')
+async def handle_delete_category(message: types.Message, state: FSMContext) -> None:
+    """
+    Handles the deletion of a category.
+    Args:
+        message: Message object from the user.
+    """
+    try:
+        keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=4, selective=True).add(
+            *(KeyboardButton(text=label) for label in get_button_labels(message.from_user.id)))
+
+        await message.answer("Выберите категорию:", reply_markup=keyboard)
+        await state.set_state("waiting_for_category_name_for_deletion")
+    except Exception as e:
+        logging.exception(f"Exception: {e} occurred while handling category deletion.")
+
+
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('delete_task:'))
 async def process_callback_delete_task(callback_query: types.CallbackQuery):
     callback_data = callback_query.data.split(':')
     task_id = int(callback_data[1])
     tag = callback_data[2] if len(callback_data) > 2 else None
+    if tag == "None":
+        tag = None
     r = requests.delete(f'http://127.0.0.1:8000/task/delete_task?task_id={task_id}')
     await get_all_tasks(chat_id=callback_query.message.chat.id, message_id=callback_query.message.message_id,
                         user_id=callback_query.from_user.id, tag=tag
@@ -168,6 +187,27 @@ async def add_category_handler(query: types.CallbackQuery, state: FSMContext):
 
     await query.message.answer("Выберите категорию:", reply_markup=keyboard)
     await state.set_state(CreateTask.waiting_for_category_selection)
+
+
+@dp.message_handler(state="waiting_for_category_name_for_deletion")
+async def handle_category_name_for_deletion(message: types.Message, state: FSMContext) -> None:
+    """
+    Handles the category name provided by the user for deletion.
+    Args:
+        message: Message object from the user.
+        state: FSM context to save the state of the conversation.
+    """
+    try:
+        user_id = message.from_user.id
+        category_name = message.text
+
+        await delete_category(user_id, category_name)  # Call the function to delete the category
+        await message.answer(f"Категория {category_name} удалена.")
+        keyboard = await send_category_keyboard(message.from_user.id)
+        await bot.send_message(chat_id=message.chat.id, text="Выберете категорию:", reply_markup=keyboard)
+        await state.finish()
+    except Exception as e:
+        logging.exception(f"Exception: {e} occurred while handling category deletion.")
 
 
 @dp.message_handler(state=CreateTask.waiting_for_category_selection)

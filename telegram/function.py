@@ -35,10 +35,17 @@ async def send_category_keyboard(user_id: int) -> types.ReplyKeyboardMarkup:
     # Add button to create new category
     new_category_button = KeyboardButton(text='Создать новую категорию')
     keyboard.add(new_category_button)
-
+    delete_category_button = KeyboardButton(text='Удаление категории')
+    keyboard.add(delete_category_button)
     # Add home button
     home_button = KeyboardButton(text='Home')
     keyboard.add(home_button)
 
+
     return keyboard
+
+
+async def delete_category(user_id: int, category_name: str):
+    response = requests.delete(f'http://127.0.0.1:8000/task/delete_tag?user_id={user_id}&tag={category_name}')
+
 
