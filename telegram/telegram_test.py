@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import logging
 
 import aiohttp
@@ -107,12 +108,17 @@ class CreateTask(StatesGroup):
 class CreateCategory(StatesGroup):
     name = State()
 
-def get_buttons(user_id: int):
-    url = f'http://127.0.0.1:8000/task/get_all_tags'
-    params = {'user_id': user_id}
-    button_labels = requests.get(url, params=params).json()
-    return button_labels
-@dp.message_handler(lambda message: message.text in get_buttons(message.from_user.id))
+
+async def is_in_buttons(user_id: int, text: str):
+    async with aiohttp.ClientSession() as session:
+        url = f'http://127.0.0.1:8000/task/get_all_tags'
+        params = {'user_id': user_id}
+        async with session.get(url, params=params) as resp:
+            button_labels = await resp.json()
+    return text in button_labels
+
+
+@dp.message_handler(lambda message: asyncio.ensure_future(is_in_buttons(message.from_user.id, message.text)))
 async def handle_category_click_wrapper(message: types.Message):
     await handle_category_click(message)
 
