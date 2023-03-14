@@ -13,6 +13,8 @@ async def get_button_labels(user_id: int):
 
 
 async def create_category(user_id: int, category_name: str):
+    if category_name in ['Удаление категории','Создать новую категорию','Home']:
+        return 'Недопустимое название категории'
     if not category_name:
         return 'Category name cannot be empty.'
     if len(category_name) > 20:
