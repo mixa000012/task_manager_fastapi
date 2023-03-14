@@ -1,20 +1,11 @@
 version: "3.0"
 services:
 
-  web:
-    container_name: "web"
-    image: nginx:alpine
-    depends_on:
-      - app
-    ports:
-      - "8082:80"
-    volumes:
-      - ./app/conf.d:/etc/nginx/conf.d
-    networks:
-      - custom
   app:
     container_name: "app"
     image: app
+    env_file:
+      - .env
     build:
       context: .
       dockerfile: DOCKERFILE
