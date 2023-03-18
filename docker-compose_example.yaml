@@ -9,10 +9,30 @@ services:
     build:
       context: .
       dockerfile: DOCKERFILE
-    ports:
-      - "8000:8000"
+    links:
+      - api
+    command: python telegram/telegram_test.py
     networks:
-      - custom
+      - net
+
+
+  api:
+    container_name: "api"
+    image: api
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: DOCKERFILE
+    links:
+      - db
+    command: python main.py
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - net
+
+
   db:
     container_name: "db"
     image: postgres:14.1-alpine
@@ -24,7 +44,15 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - custom
+      - net
+#  db_migration:
+#    image: app
+#    restart: "on-failure"
+#    links:
+#      - db
+#    depends_on:
+#      - db
+#    command: sh -c "python -m alembic upgrade head"
 networks:
-  custom:
+  net:
     driver: bridge

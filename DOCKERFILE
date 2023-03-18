@@ -2,7 +2,4 @@ FROM python:3.10-slim-buster
 COPY . .
 WORKDIR .
 RUN python3 -m pip install -r requirements.txt
-EXPOSE 80
-CMD ["python", "main.py"]
-CMD ["cd", "telegram"]
-CMD ["python", "telegram_test.py"]
+EXPOSE 8000

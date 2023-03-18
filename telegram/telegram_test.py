@@ -12,7 +12,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from telegram.function import create_category, get_button_labels, send_category_keyboard, delete_category
+from function import create_category, get_button_labels, send_category_keyboard, delete_category
 
 API_TOKEN = config('API_TOKEN')
 storage = MemoryStorage()
@@ -51,7 +51,7 @@ add_category_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 
 
 async def get_all_tasks(chat_id, message_id=None, user_id=None, chat_type=None, tag=None):
-    url = f'http://127.0.0.1:8000/task/get_all_tasks?user_id={user_id}'
+    url = f'http://api:8000/task/get_all_tasks?user_id={user_id}'
     if tag is not None:
         url += f'&tag={tag}'
     async with aiohttp.ClientSession() as session:
@@ -112,7 +112,7 @@ class CreateCategory(StatesGroup):
 
 async def is_in_buttons(user_id: int, text: str):
     async with aiohttp.ClientSession() as session:
-        url = f'http://127.0.0.1:8000/task/get_all_tags'
+        url = f'http://api:8000/task/get_all_tags'
         params = {'user_id': user_id}
         async with session.get(url, params=params) as resp:
             button_labels = await resp.json()
@@ -182,7 +182,7 @@ async def process_callback_delete_task(callback_query: types.CallbackQuery):
     if tag == "None":
         tag = None
     async with aiohttp.ClientSession() as session:
-        async with session.delete(f"http://127.0.0.1:8000/task/delete_task?task_id={task_id}") as resp:
+        async with session.delete(f"http://api:8000/task/delete_task?task_id={task_id}") as resp:
             pass
     await get_all_tasks(chat_id=callback_query.message.chat.id, message_id=callback_query.message.message_id,
                         user_id=callback_query.from_user.id, tag=tag
@@ -199,7 +199,7 @@ async def create_task_handler(message: types.Message, state: FSMContext):
             'user_id': message.from_user.id
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post('http://127.0.0.1:8000/task/create', json=json_data) as response:
+            async with session.post('http://api:8000/task/create', json=json_data) as response:
                 r = await response.json()
         await message.answer(f"Таск создан! {task_description}\n\nХотите добавить категорию?",
                              reply_markup=add_category_keyboard)
@@ -253,7 +253,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
     task_data = await state.get_data()
     task_id = task_data['task_id']
     async with aiohttp.ClientSession() as session:
-        url = f'http://127.0.0.1:8000/task/add_tag'
+        url = f'http://api:8000/task/add_tag'
         params = {'task_id': task_id, 'tag_name': category_name, 'user_id': message.from_user.id}
         async with session.put(url, params=params) as resp:
             if resp.status != 200:
