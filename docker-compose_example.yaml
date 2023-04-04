@@ -26,7 +26,7 @@ services:
       dockerfile: DOCKERFILE
     links:
       - db
-    command: python main.py
+    command: sh -c "python -m alembic upgrade head && python main.py"
     ports:
       - "127.0.0.1:8000:8000"
     networks:
@@ -45,14 +45,18 @@ services:
       - "5432:5432"
     networks:
       - net
-#  db_migration:
-#    image: app
-#    restart: "on-failure"
-#    links:
-#      - db
-#    depends_on:
-#      - db
-#    command: sh -c "python -m alembic upgrade head"
+  db_test:
+    container_name: "db_test"
+    image: postgres:14.1-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres_test
+    ports:
+      - "5433:5432"
+    networks:
+      - net
 networks:
   net:
     driver: bridge
