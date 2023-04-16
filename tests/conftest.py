@@ -5,20 +5,23 @@ from typing import Generator
 
 import asyncpg
 import pytest
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 from sqlalchemy import text
-
-
+from sqlalchemy import delete
 from sql_app.session import get_db
 from main import app
+from sql_app.models import Task
 
 CLEAN_TABLES = [
     "tasks"
 ]
 DB_URL = 'postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/postgres'
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -40,15 +43,20 @@ async def async_session_test():
     async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     yield async_session
 
+    await engine.dispose()
+
 
 @pytest.fixture(scope="function", autouse=True)
 async def clean_tables(async_session_test):
     """Clean data in all tables before running test function"""
     async with async_session_test() as session:
-        async with session.begin():
-            for table_for_cleaning in CLEAN_TABLES:
-                await session.execute(text(f"""TRUNCATE TABLE {table_for_cleaning};"""))
-
+        try:
+            async with session.begin():
+                await session.execute(delete(Task))
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
 
 async def _get_test_db():
     try:
@@ -88,11 +96,30 @@ async def asyncpg_pool():
 
 
 @pytest.fixture
-async def get_user_from_database(asyncpg_pool):
-    async def get_user_from_database_by_id(user_id: int):
+async def get_task_from_database(asyncpg_pool):
+    async def get_task_from_database_by_id(user_id: int):
         async with asyncpg_pool.acquire() as connection:
             return await connection.fetch(
                 """SELECT * FROM tasks WHERE user_id = $1;""", user_id
             )
 
-    return get_user_from_database_by_id
+    return get_task_from_database_by_id
+
+
+@pytest.fixture
+async def create_task_in_database(asyncpg_pool):
+    async def create_user_in_database(
+            id: int,
+            user_id: str,
+            task: str,
+    ):
+        async with asyncpg_pool.acquire() as connection:
+            return await connection.execute(
+                """INSERT INTO tasks VALUES ($1, $2, $3, $4)""",
+                id,
+                user_id,
+                task,
+                datetime.now()
+            )
+
+    return create_user_in_database
