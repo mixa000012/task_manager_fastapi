@@ -36,4 +36,4 @@ Change `alembic.ini` and `env.py`
 -  ```alembic revision --autogenerate -m "comment"```
 - ```alembic upgrade heads```
 
-Finally, start your bot with `docker-compose up -d` command.
+Finally, start your bot with `docker compose -f docker-compose.yaml up -d` command.
