@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Type
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,17 +7,14 @@ from fastapi import Depends, HTTPException
 
 from sql_app.session import get_db
 from sql_app.models import Task, Tag
-from sql_app.schemas import TagCreate, TaskCreate, TaskResponse
+from sql_app.schemas import TagCreate, TaskCreate, TaskResponse, Tag_
 
 task_router = APIRouter()
 
 
 @task_router.put("/add_tag")
-async def add_tag(task_id: int, tag_name: str, user_id: int, db: AsyncSession = Depends(get_db)):
+async def add_tag(task_id: int, tag_name: str, user_id: int, db: AsyncSession = Depends(get_db)) -> TaskResponse:
     task = await db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    # tag = db.query(Tag).filter(Tag.tag == tag_name).first()
     tag = await db.execute(select(Tag).where(Tag.tag == tag_name, Tag.user_id == user_id))
     tag = tag.scalar()
 
@@ -25,20 +22,20 @@ async def add_tag(task_id: int, tag_name: str, user_id: int, db: AsyncSession = 
     db.add(task)
     await db.commit()
     await db.refresh(task)
-    return task
+    return TaskResponse(id=task.id, user_id=task.user_id, title=task.title, tag_id=task.tag_id, created_at=task.created_at)
 
 
 @task_router.post("/create_tag")
-async def create_tag(item: TagCreate, user_id: int, db: AsyncSession = Depends(get_db)):
-    db_item = Tag(**item.dict(), user_id=user_id)
+async def create_tag(item: TagCreate, db: AsyncSession = Depends(get_db)) -> Tag_:
+    db_item = Tag(**item.dict())
     db.add(db_item)
     await db.commit()
     await db.refresh(db_item)
-    return db_item
+    return Tag_(tag=db_item.tag, user_id=db_item.user_id)
 
 
 @task_router.get("/get_all_tags")
-async def get_all_tags(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_all_tags(user_id: int, db: AsyncSession = Depends(get_db)) -> list[str]:
     tasks = await db.execute(select(Tag).filter_by(user_id=user_id))
     tasks = tasks.scalars().all()
     text = [i.tag for i in tasks]
@@ -46,14 +43,14 @@ async def get_all_tags(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @task_router.get("/is_exist_tag")
-async def is_exist_tag(tag: str, db: AsyncSession = Depends(get_db)):
+async def is_exist_tag(tag: str, db: AsyncSession = Depends(get_db)) -> bool:
     stmt = select(Tag).where(Tag.tag == tag)
     result = await db.execute(stmt)
     return bool(result.scalar())
 
 
 @task_router.delete("/delete_tag")
-async def delete_tag(user_id: int, tag: str, db: AsyncSession = Depends(get_db)):
+async def delete_tag(user_id: int, tag: str, db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     async with db.begin():
         tag_instance = await db.execute(select(Tag).filter_by(user_id=user_id, tag=tag))
         await db.delete(tag_instance.scalars().first())
@@ -79,7 +76,7 @@ async def create_task(obj: TaskCreate, db: AsyncSession = Depends(get_db)) -> Ta
 
 
 @task_router.delete("/delete_task")
-async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     async with db.begin():
         task = await db.execute(
             select(Task).where(Task.id == task_id)
@@ -93,7 +90,8 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @task_router.get("/get_all_tasks")
-async def get_all_tasks(user_id: int, tag: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def get_all_tasks(user_id: int, tag: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> list[
+    TaskResponse]:
     async with db.begin():
         if tag:
             tasks = await db.execute(
@@ -105,4 +103,5 @@ async def get_all_tasks(user_id: int, tag: Optional[str] = None, db: AsyncSessio
                 select(Task).filter(Task.user_id == user_id)
             )
             tasks = tasks.scalars().all()
-    return tasks
+    return [TaskResponse(id=task.id, title=task.title, user_id=task.user_id, created_at=task.created_at) for task in
+            tasks]

@@ -70,9 +70,9 @@ async def test_get_all_tasks(client, create_task_in_database):
     assert data[1]['title'] == task_data_2["task"]
 
 
-async def test_add_tag(async_session_test):
+async def test_add_tag(client, async_session_test):
     # Create a sample task and tag
-    task = Task(id=1, user_id=132, title="Test Task")
+    task = Task(id=2, user_id=132, title="Test Task")
     tag = Tag(id=1, user_id=132, tag="Test Tag")
     async with async_session_test() as session:
         async with session.begin():
@@ -80,16 +80,81 @@ async def test_add_tag(async_session_test):
             session.add(tag)
         await session.commit()
 
-
     # Test add_tag function
-    updated_task = await add_tag(task_id=1, tag_name="Test Tag", user_id=132, db=async_session_test)
+    response = client.put(f"task/add_tag?task_id={task.id}&tag_name={tag.tag}&user_id={task.user_id}").json()
+    assert len(response) == 5
+    assert response.get('tag_id') == tag.id
+    assert response.get('user_id') == tag.user_id
+    assert response.get('id') == task.id
+    assert response.get('title') == task.title
 
-    # Check if the tag was added to the task
-    assert len(updated_task.tags) == 1
-    assert updated_task.tags[0].tag == "Test Tag"
 
-    # Test nonexistent task
-    with pytest.raises(HTTPException) as exc_info:
-        await add_tag(task_id=999, tag_name="Test Tag", user_id=None, db=async_session_test)
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Task not found"
+async def test_create_tag(client, async_session_test):
+    task_data = {
+        "tag": "test tag",
+        "user_id": 133
+    }
+    response = client.post("/task/create_tag", data=json.dumps(task_data))
+    assert response.status_code == 200
+    data_from_resp = response.json()
+    assert data_from_resp.get('user_id') is not None
+    assert data_from_resp.get('user_id') == task_data["user_id"]
+    assert data_from_resp.get('tag') == task_data["tag"]
+
+
+async def test_get_all_tags(client, async_session_test):
+    tag_data = {
+        "tag": "test tag",
+        "user_id": 133
+    }
+    tag_data_2 = {
+        "tag": "test tag 2",
+        "user_id": 133
+    }
+    async with async_session_test() as session:
+        async with session.begin():
+            tag_1 = Tag(**tag_data)
+            tag_2 = Tag(**tag_data_2)
+            session.add(tag_1)
+            session.add(tag_2)
+        await session.commit()
+    response = client.get(f"/task/get_all_tags?user_id={tag_2.user_id}")
+    assert response.status_code == 200
+    data_from_resp = response.json()
+    assert len(data_from_resp) == 2
+    assert data_from_resp[0] == 'test tag'
+    assert data_from_resp[1] == 'test tag 2'
+
+
+async def test_is_exist_tag(client, async_session_test):
+    tag_data = {
+        "tag": "test tag",
+        "user_id": 133
+    }
+    async with async_session_test() as session:
+        async with session.begin():
+            tag_1 = Tag(**tag_data)
+            session.add(tag_1)
+        await session.commit()
+    response = client.get(f"/task/is_exist_tag?tag={tag_data.get('tag')}")
+
+    assert response.status_code == 200
+    assert response.text == 'true'
+
+
+async def test_delete_tag_success(client, async_session_test):
+    # Create a new task in the database to delete
+    tag_data = {
+        "tag": "test tag",
+        "user_id": 133
+    }
+    async with async_session_test() as session:
+        async with session.begin():
+            tag_1 = Tag(**tag_data)
+            session.add(tag_1)
+        await session.commit()
+    response = client.delete(
+        f"/task/delete_tag/?user_id={tag_data.get('user_id')}&tag={tag_data.get('tag')}",
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}

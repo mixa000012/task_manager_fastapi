@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy import delete
 from sql_app.session import get_db
 from main import app
-from sql_app.models import Task
+from sql_app.models import Task, Tag
 
 CLEAN_TABLES = [
     "tasks"
@@ -53,6 +53,8 @@ async def clean_tables(async_session_test):
         try:
             async with session.begin():
                 await session.execute(delete(Task))
+                await session.execute(delete(Tag))
+
             await session.commit()
         except Exception as e:
             await session.rollback()

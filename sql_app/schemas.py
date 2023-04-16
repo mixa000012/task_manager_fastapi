@@ -4,10 +4,11 @@ from typing import List, Optional
 
 
 
-class Tag(BaseModel):
+class Tag_(BaseModel):
     tag: str
+    user_id: int
 
-class TagCreate(Tag):
+class TagCreate(Tag_):
     pass
 
 
@@ -21,3 +22,6 @@ class TaskResponse(BaseModel):
     user_id: int
     title: str
     created_at: datetime
+    tag_id: int | None
+
+
