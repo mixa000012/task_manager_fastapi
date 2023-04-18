@@ -1,11 +1,15 @@
 import aiohttp
 import requests
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import types
+from decouple import config
+
+task_url = config('API_ROUT')
+
 
 async def get_button_labels(user_id: int):
     async with aiohttp.ClientSession() as session:
-        url = f'http://api:8000/task/get_all_tags'
+        url = f'{task_url}/get_all_tags'
         params = {'user_id': user_id}
         async with session.get(url, params=params) as resp:
             button_labels = await resp.json()
@@ -13,7 +17,7 @@ async def get_button_labels(user_id: int):
 
 
 async def create_category(user_id: int, category_name: str):
-    if category_name in ['Удаление категории','Создать новую категорию','Home']:
+    if category_name in ['Удаление категории', 'Создать новую категорию', 'Home']:
         return 'Недопустимое название категории'
     if not category_name:
         return 'Category name cannot be empty.'
@@ -21,11 +25,11 @@ async def create_category(user_id: int, category_name: str):
         return 'Category name is too long.'
     if category_name in await get_button_labels(user_id):
         return 'You already have this category'
-    json_data = {'tag': category_name}
+    json_data = {'tag': category_name, 'userd_id': user_id}
 
     # Send request to server
     async with aiohttp.ClientSession() as session:
-        url = f'http://api:8000/task/create_tag?user_id={user_id}'
+        url = f'{task_url}/create_tag'
         async with session.post(url, json=json_data) as resp:
             if resp.status != 200:
                 raise Exception(f"Error creating tag: {resp.status}")
@@ -48,11 +52,32 @@ async def send_category_keyboard(user_id: int) -> types.ReplyKeyboardMarkup:
     home_button = KeyboardButton(text='Home')
     keyboard.add(home_button)
 
-
     return keyboard
 
 
 async def delete_category(user_id: int, category_name: str):
-    response = requests.delete(f'http://api:8000/task/delete_tag?user_id={user_id}&tag={category_name}')
+    response = requests.delete(f'{task_url}/delete_tag?user_id={user_id}&tag={category_name}')
 
 
+async def get_all_tasks(chat_id, bot, message_id=None, user_id=None, chat_type=None, tag=None):
+    url = f'{task_url}/get_all_tasks?user_id={user_id}'
+    if tag is not None:
+        url += f'&tag={tag}'
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            tasks = await resp.json()
+    if len(tasks) > 0:
+        buttons = [
+            [InlineKeyboardButton(text=task.get('title'), callback_data=f"delete_task:{task.get('id')}:{tag}")]
+            for task in tasks
+        ]
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        if chat_type == 'private':
+            await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
+        elif message_id:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+        else:
+            await bot.send_message(chat_id, 'Ваши задачи', reply_markup=keyboard)
+    else:
+        await bot.send_message(chat_id, 'У вас нет задач')

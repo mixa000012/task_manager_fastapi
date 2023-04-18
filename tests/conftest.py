@@ -2,7 +2,7 @@ import asyncio
 import os
 from typing import Any
 from typing import Generator
-
+import settings
 import asyncpg
 import pytest
 from datetime import datetime
@@ -13,14 +13,13 @@ from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy import delete
-from sql_app.session import get_db
+from db.session import get_db
 from main import app
-from sql_app.models import Task, Tag
+from db.models import Task, Tag
 
 CLEAN_TABLES = [
     "tasks"
 ]
-DB_URL = 'postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/postgres'
 
 
 @pytest.fixture(scope="session")
@@ -39,7 +38,7 @@ async def run_migrations():
 
 @pytest.fixture(scope="session")
 async def async_session_test():
-    engine = create_async_engine(DB_URL, future=True, echo=True)
+    engine = create_async_engine(settings.TEST_DATABASE_URL, future=True, echo=True)
     async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     yield async_session
 
@@ -60,11 +59,12 @@ async def clean_tables(async_session_test):
             await session.rollback()
             raise e
 
+
 async def _get_test_db():
     try:
         # create async engine for interaction with database
         test_engine = create_async_engine(
-            DB_URL, future=True, echo=True
+            settings.TEST_DATABASE_URL, future=True, echo=True
         )
 
         # create session for the interaction with database
@@ -91,7 +91,7 @@ async def client() -> Generator[TestClient, Any, None]:
 @pytest.fixture(scope="session")
 async def asyncpg_pool():
     pool = await asyncpg.create_pool(
-        "".join(DB_URL.split("+asyncpg"))
+        "".join(settings.TEST_DATABASE_URL.split("+asyncpg"))
     )
     yield pool
     pool.close()

@@ -1,8 +1,8 @@
 import json
 import pytest
 
-from sql_app.models import Task, Tag
-from api.handlers import add_tag
+from db.models import Task, Tag
+from api.endpoints import add_tag
 from fastapi import HTTPException
 
 

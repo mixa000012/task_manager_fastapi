@@ -1,13 +1,13 @@
-from typing import Optional, Type
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.routing import APIRouter
 from fastapi import Depends, HTTPException
 
-from sql_app.session import get_db
-from sql_app.models import Task, Tag
-from sql_app.schemas import TagCreate, TaskCreate, TaskResponse, Tag_
+from db.session import get_db
+from db.models import Task, Tag
+from api.schemas import TagCreate, TaskCreate, TaskResponse, Tag_
 
 task_router = APIRouter()
 
@@ -22,7 +22,8 @@ async def add_tag(task_id: int, tag_name: str, user_id: int, db: AsyncSession = 
     db.add(task)
     await db.commit()
     await db.refresh(task)
-    return TaskResponse(id=task.id, user_id=task.user_id, title=task.title, tag_id=task.tag_id, created_at=task.created_at)
+    return TaskResponse(id=task.id, user_id=task.user_id, title=task.title, tag_id=task.tag_id,
+                        created_at=task.created_at)
 
 
 @task_router.post("/create_tag")
@@ -89,6 +90,7 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)) -> dict[
     return {"ok": True}
 
 
+# todo айограм оптимизейшен
 @task_router.get("/get_all_tasks")
 async def get_all_tasks(user_id: int, tag: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> list[
     TaskResponse]:
