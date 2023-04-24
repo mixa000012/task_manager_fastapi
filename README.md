@@ -1,6 +1,6 @@
 # Task manager Bot
 
- <a href="https://t.me/mixa000012"><img src="https://img.shields.io/badge/Telegram-💣%20@mixa000012"></a>  
+ <a href="https://t.me/mixa000012"><img src="https://img.shields.io/badge/Telegram-💣%20@mixa000012"></a>
 
 This is task manager bot that helps you to reach your goals!
 
@@ -18,8 +18,8 @@ This is task manager bot that helps you to reach your goals!
 
 Grab `docker-compose-example.yml`, rename it to `docker-compose.yml`
 
-Create `.env` file and put it next to your `docker-compose.yml`, open 
-and fill the necessary data(API_TOKEN). 
+Create `.env` file and put it next to your `docker-compose.yml`, open
+and fill the necessary data(API_TOKEN).
 
 To init migrations in terminal:
 
