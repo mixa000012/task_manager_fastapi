@@ -1,25 +1,24 @@
 import asyncio
 import os
+from datetime import datetime
 from typing import Any
 from typing import Generator
-import settings
+
 import asyncpg
 import pytest
-from datetime import datetime
-
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
-from sqlalchemy import text
-from sqlalchemy import delete
+
+import settings
+from db.models import Tag
+from db.models import Task
 from db.session import get_db
 from main import app
-from db.models import Task, Tag
 
-CLEAN_TABLES = [
-    "tasks"
-]
+CLEAN_TABLES = ["tasks"]
 
 
 @pytest.fixture(scope="session")
@@ -111,9 +110,9 @@ async def get_task_from_database(asyncpg_pool):
 @pytest.fixture
 async def create_task_in_database(asyncpg_pool):
     async def create_user_in_database(
-            id: int,
-            user_id: str,
-            task: str,
+        id: int,
+        user_id: str,
+        task: str,
     ):
         async with asyncpg_pool.acquire() as connection:
             return await connection.execute(
@@ -121,7 +120,7 @@ async def create_task_in_database(asyncpg_pool):
                 id,
                 user_id,
                 task,
-                datetime.now()
+                datetime.now(),
             )
 
     return create_user_in_database

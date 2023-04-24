@@ -1,4 +1,7 @@
-from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.dispatcher.filters.state import State
+from aiogram.dispatcher.filters.state import StatesGroup
+
+
 class CreateTask(StatesGroup):
     waiting_for_task_description = State()
     waiting_for_add_category = State()
@@ -8,4 +11,3 @@ class CreateTask(StatesGroup):
 
 class CreateCategory(StatesGroup):
     name = State()
-
