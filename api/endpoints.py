@@ -22,10 +22,14 @@ async def add_tag(
     task_id: int, tag_name: str, user_id: int, db: AsyncSession = Depends(get_db)
 ) -> TaskResponse:
     task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
     tag = await db.execute(
         select(Tag).where(Tag.tag == tag_name, Tag.user_id == user_id)
     )
     tag = tag.scalar()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
 
     task.tags = tag
     db.add(task)
@@ -42,6 +46,14 @@ async def add_tag(
 
 @task_router.post("/create_tag")
 async def create_tag(item: TagCreate, db: AsyncSession = Depends(get_db)) -> Tag_:
+    existing_tag = await db.execute(
+        select(Tag).where(Tag.tag == item.tag, Tag.user_id == item.user_id)
+    )
+    existing_tag = existing_tag.scalar()
+
+    if existing_tag:
+        raise HTTPException(status_code=400, detail="Tag already exists")
+
     db_item = Tag(**item.dict())
     db.add(db_item)
     await db.commit()
@@ -70,6 +82,10 @@ async def delete_tag(
 ) -> dict[str, bool]:
     async with db.begin():
         tag_instance = await db.execute(select(Tag).filter_by(user_id=user_id, tag=tag))
+
+        if not tag_instance:
+            raise HTTPException(status_code=404, detail="Tag not found")
+
         await db.delete(tag_instance.scalars().first())
         await db.commit()
     return {"ok": True}
@@ -79,6 +95,9 @@ async def delete_tag(
 async def create_task(
     obj: TaskCreate, db: AsyncSession = Depends(get_db)
 ) -> TaskResponse:
+    if not obj.title or obj.title.strip() == "":
+        raise HTTPException(status_code=400, detail="Task title cannot be empty")
+
     new_task = Task(
         user_id=obj.user_id,
         title=obj.title,
@@ -101,9 +120,11 @@ async def delete_task(
     async with db.begin():
         task = await db.execute(select(Task).where(Task.id == task_id))
         task = task.scalar()
-        await db.delete(task)
+
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
+
+        await db.delete(task)
         await db.commit()
     return {"ok": True}
 
